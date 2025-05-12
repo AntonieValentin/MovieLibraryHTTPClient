@@ -147,9 +147,9 @@ void delete_user(char *message, char *response, char *cookie_login){
     strcpy(url, "/api/v1/tema/admin/users/"); 
     strcat(url, username);
     if (cookie_login == NULL)
-        message = compute_delete_request("63.32.125.183:8081", url, NULL, NULL, 0);
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, NULL, 0, NULL);
     else
-        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1);
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
 
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
@@ -433,6 +433,39 @@ void get_movie(char *message, char *response, char *cookie_login, char *token){
 }
 
 
+void delete_movie(char *message, char *response, char *cookie_login, char *token){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    char *id = calloc(BUFLEN, sizeof(char));
+    printf("id=");
+    scanf("%s",id);
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/movies/");
+    strcat(url, id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "deleted successfully")){
+        printf("SUCCESS: Film sters cu succes\n");
+    }
+    else if (strstr(response, "Invalid movie id")){
+        printf("ERROR: ID invalid\n");
+    }
+    else
+        printf("ERROR: Fara acces library\n");
+    free(url);
+    free(id);
+    close_connection(sockfd);
+}
+
+
 
 int main(int argc, char *argv[])
 {
@@ -477,6 +510,9 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp(command, "get_movie", 9)){
             get_movie(message, response, cookie_login, token);
+        }
+        else if (!strncmp(command, "delete_movie", 12)){
+            delete_movie(message, response, cookie_login, token);
         }
     } while (strncmp(command, "exit", 4));
 

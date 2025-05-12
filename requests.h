@@ -12,6 +12,6 @@ char *compute_post_request(char *host, char *url, char* content_type, char **bod
 							char *token);
 
 char *compute_delete_request(char *host, char *url, char *query_params,
-							char **cookies, int cookies_count);
+							char **cookies, int cookies_count, char *token);
 
 #endif
