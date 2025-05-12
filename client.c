@@ -351,7 +351,7 @@ void add_movie(char *message, char *response, char *cookie_login, char *token){
     while (getchar() != '\n');
     printf("description=");
     fgets(description, BUFLEN, stdin);
-    title[strcspn(description, "\n")] = '\0'; 
+    description[strcspn(description, "\n")] = '\0';
     printf("rating=");
     rc = scanf("%lf", &rating);
     if (rc == 0 || rating < 0){
@@ -377,6 +377,9 @@ void add_movie(char *message, char *response, char *cookie_login, char *token){
     response = receive_from_server(sockfd);
     if (strstr(response, "201 CREATED"))
         printf("SUCCESS: Film adaugat\n");
+    else if (strstr(response, "Rating must be between 0 and 9.9")){
+        printf("ERROR: Date invalide/incomplete\n");
+    }
     else
         printf("ERROR: Fara acces library\n");
 
@@ -406,22 +409,21 @@ void get_movie(char *message, char *response, char *cookie_login, char *token){
 
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-    printf("%s", response);
-    if (strstr(response, "movies")){
+    if (strstr(response, "200 OK")){
         printf("SUCCESS: Filmul dat are urmatoarele informatii:\n");
         JSON_Value *root_value = json_parse_string(strchr(response, '{'));
         JSON_Object *root_obj = json_value_get_object(root_value);
-        JSON_Array  *movies = json_object_get_array(root_obj, "movies");
-        int number_movies = json_array_get_count(movies);
-        for (int i = 0; i < number_movies; i++) {
-            JSON_Object *user_obj = json_array_get_object(movies, i);
-            const char *title = json_object_get_string(user_obj, "title");
-            //const char *idMovie = json_object_get_string(user_obj, "id");
-            //if (strcmp(id, idMovie)){
-                //printf("#%s %s\n", idMovie, title);
-                //break;
-            //}
-        }
+        const char *title = json_object_get_string(root_obj, "title");
+        const char *description = json_object_get_string(root_obj, "description");
+        const char * rating = json_object_get_string(root_obj, "rating");
+        const int year = (int)json_object_get_number(root_obj, "year");
+        printf("Title: %s\n", title);
+        printf("Year: %d\n", year);
+        printf("Description: %s\n", description);
+        printf("Rating: %lf\n", atof(rating));
+    }
+    else if (strstr(response, "Movie not found")){
+        printf("ERROR: ID invalid\n");
     }
     else
         printf("ERROR: Fara acces library\n");
