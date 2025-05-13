@@ -500,6 +500,81 @@ void get_collections(char *message, char *response, char *cookie_login, char *to
     close_connection(sockfd);
 }
 
+void add_movie_to_collection_aux(char *message, char *response, char *cookie_login, char *token, int collection_id, int movie_id){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    JSON_Value *val = json_value_init_object();
+    JSON_Object *obj = json_value_get_object(val);
+
+    json_object_set_number(obj, "id", movie_id);
+    
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/collections/");
+    char *buffer = calloc(BUFLEN, sizeof(char));
+    sprintf(buffer, "%d", collection_id);
+    strcat(url, buffer);
+    strcat(url, "/movies");
+
+    char *string = json_serialize_to_string(val);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_post_request("63.32.125.183:8081", url, "application/json", &string, 1, &cookie_login, 1, NULL);
+    else
+        message = compute_post_request("63.32.125.183:8081", url, "application/json", &string, 1, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    json_free_serialized_string(string);
+    json_value_free(val);
+    free(url);
+    free(buffer);
+    close_connection(sockfd);
+}
+
+void get_collection_aux(char *message, char *response, char *cookie_login, char *token, char *id){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/collections/");
+    strcat(url, id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "200 OK")){
+        JSON_Value *root_value = json_parse_string(strchr(response, '{'));
+        JSON_Object *root_obj = json_value_get_object(root_value);
+        const char *title = json_object_get_string(root_obj, "title");
+        const char *owner = json_object_get_string(root_obj, "owner");
+        printf("title: %s\n", title);
+        printf("owner: %s\n", owner);
+        JSON_Array *movies = json_object_get_array(root_obj, "movies");
+        size_t movies_count = json_array_get_count(movies);
+        for (size_t i = 0; i < movies_count; i++) {
+            JSON_Object *movie = json_array_get_object(movies, i);
+            int movie_id = (int)json_object_get_number(movie, "id");
+            const char *movie_title = json_object_get_string(movie, "title");
+            printf("#%d: %s\n", movie_id, movie_title);
+        }
+    }
+    else if (strstr(response, "Invalid collection id or you do not own this collection")){
+        printf("ERROR: ID invalid sau nu detii colectia\n");
+    }
+    else
+        printf("ERROR: Fara acces library\n");
+    free(url);
+    close_connection(sockfd);
+}
+
+
 void add_collection(char *message, char *response, char *cookie_login, char *token){
     if (cookie_login == NULL){
         printf("ERROR: Fara acces library\n");
@@ -522,6 +597,16 @@ void add_collection(char *message, char *response, char *cookie_login, char *tok
         free(title);
         return;
     }
+    int *movie_ids = calloc(num_movies, sizeof(int));
+    for (int i = 0; i < num_movies; i++){
+        printf("movie_id[%d]=", i);
+        rc = scanf("%d", &movie_ids[i]);
+        if (rc == 0 || movie_ids < 0){
+            printf("ERROR: Date invalide/incomplete\n");
+            free(title);
+            return;
+        }
+    }
     json_object_set_string(obj, "title", title);
     char *string = json_serialize_to_string(val);
     int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
@@ -532,15 +617,21 @@ void add_collection(char *message, char *response, char *cookie_login, char *tok
 
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-    printf("%s", response);
-    if (strstr(response, "201 CREATED"))
+    if (strstr(response, "201 CREATED")){
         printf("SUCCESS: Colectie adaugata\n");
+        char *id = strtok(strchr(response, '{') + 6, ",");
+        for (int i = 0; i < num_movies; i++){
+            add_movie_to_collection_aux(message, response, cookie_login, token, atoi(id), movie_ids[i]);
+        }
+        get_collection_aux(message, response, cookie_login, token, id);
+    }
     else
         printf("ERROR: Fara acces library\n");
 
     json_free_serialized_string(string);
     json_value_free(val);
     free(title);
+    free(movie_ids);
     close_connection(sockfd);
 }
 
@@ -569,7 +660,7 @@ void add_movie_to_collection(char *message, char *response, char *cookie_login, 
     json_object_set_number(obj, "id", movie_id);
     
     char *url = calloc(BUFLEN, sizeof(char));
-    strcpy(url, "/api/v1/tema/library/collections/:");
+    strcpy(url, "/api/v1/tema/library/collections/");
     char *buffer = calloc(BUFLEN, sizeof(char));
     sprintf(buffer, "%d", collection_id);
     strcat(url, buffer);
@@ -584,9 +675,11 @@ void add_movie_to_collection(char *message, char *response, char *cookie_login, 
 
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-    printf("%s", response);
-    if (strstr(response, "201 CREATED"))
+    if (strstr(response, "Movie added to collection successfully"))
         printf("SUCCESS: Film adaugat în colectie\n");
+    else if (strstr(response, "Invalid collection id or you do not own this collection")){
+        printf("ERROR: ID invalid sau nu detii colectia");
+    }
     else
         printf("ERROR: Fara acces library\n");
 
@@ -594,6 +687,52 @@ void add_movie_to_collection(char *message, char *response, char *cookie_login, 
     json_value_free(val);
     free(url);
     free(buffer);
+    close_connection(sockfd);
+}
+
+void get_collection(char *message, char *response, char *cookie_login, char *token){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    char *id = calloc(BUFLEN, sizeof(char));
+    printf("id=");
+    scanf("%s",id);
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/collections/");
+    strcat(url, id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "200 OK")){
+        printf("SUCCESS: Detalii colectie\n");
+        JSON_Value *root_value = json_parse_string(strchr(response, '{'));
+        JSON_Object *root_obj = json_value_get_object(root_value);
+        const char *title = json_object_get_string(root_obj, "title");
+        const char *owner = json_object_get_string(root_obj, "owner");
+        printf("title: %s\n", title);
+        printf("owner: %s\n", owner);
+        JSON_Array *movies = json_object_get_array(root_obj, "movies");
+        size_t movies_count = json_array_get_count(movies);
+        for (size_t i = 0; i < movies_count; i++) {
+            JSON_Object *movie = json_array_get_object(movies, i);
+            int movie_id = (int)json_object_get_number(movie, "id");
+            const char *movie_title = json_object_get_string(movie, "title");
+            printf("#%d: %s\n", movie_id, movie_title);
+        }
+    }
+    else if (strstr(response, "Invalid collection id or you do not own this collection")){
+        printf("ERROR: ID invalid sau nu detii colectia\n");
+    }
+    else
+        printf("ERROR: Fara acces library\n");
+    free(url);
+    free(id);
     close_connection(sockfd);
 }
 
@@ -640,7 +779,6 @@ int main(int argc, char *argv[])
             get_movies(message, response, cookie_login, token);
         }
         else if (!strncmp(command, "add_movie_to_collection", 23)){
-            // TODO
             add_movie_to_collection(message, response, cookie_login, token);
         }
         else if (!strncmp(command, "add_movie", 9)){
@@ -659,8 +797,10 @@ int main(int argc, char *argv[])
             get_collections(message, response, cookie_login, token);
         }
         else if (!strncmp(command, "add_collection", 14)){
-            // TODO
             add_collection(message, response, cookie_login, token);
+        }
+        else if (!strncmp(command, "get_collection", 14)){
+            get_collection(message, response, cookie_login, token);
         }
     } while (strncmp(command, "exit", 4));
 
