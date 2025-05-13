@@ -736,6 +736,38 @@ void get_collection(char *message, char *response, char *cookie_login, char *tok
     close_connection(sockfd);
 }
 
+void delete_collection(char *message, char *response, char *cookie_login, char *token){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    char *id = calloc(BUFLEN, sizeof(char));
+    printf("id=");
+    scanf("%s",id);
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/collections/");
+    strcat(url, id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "deleted successfully")){
+        printf("SUCCESS: Colectie stearsa\n");
+    }
+    else if (strstr(response, "Invalid collection id or you do not own this collection")){
+        printf("ERROR: ID invalid sau nu detii colectia\n");
+    }
+    else
+        printf("ERROR: Fara acces library\n");
+    free(url);
+    free(id);
+    close_connection(sockfd);
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -801,6 +833,9 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp(command, "get_collection", 14)){
             get_collection(message, response, cookie_login, token);
+        }
+        else if (!strncmp(command, "delete_collection", 17)){
+            delete_collection(message, response, cookie_login, token);
         }
     } while (strncmp(command, "exit", 4));
 
