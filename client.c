@@ -11,6 +11,18 @@
 #include "parson.h"
 #include <ctype.h>
 
+int is_positive_integer(const char *str) {
+
+    for (int i = 0; str[i]; i++) {
+        if (!isdigit((unsigned char)str[i])) {
+            return -1; 
+        }
+    }
+
+    return 0;  
+}
+
+
 char *login_admin(char *message, char *response){
     char *cookie_login = NULL;
     JSON_Value *val = json_value_init_object();
@@ -549,27 +561,46 @@ void get_collection_aux(char *message, char *response, char *cookie_login, char 
 
     send_to_server(sockfd, message);
     response = receive_from_server(sockfd);
-    if (strstr(response, "200 OK")){
-        JSON_Value *root_value = json_parse_string(strchr(response, '{'));
-        JSON_Object *root_obj = json_value_get_object(root_value);
-        const char *title = json_object_get_string(root_obj, "title");
-        const char *owner = json_object_get_string(root_obj, "owner");
-        printf("title: %s\n", title);
-        printf("owner: %s\n", owner);
-        JSON_Array *movies = json_object_get_array(root_obj, "movies");
-        size_t movies_count = json_array_get_count(movies);
-        for (size_t i = 0; i < movies_count; i++) {
-            JSON_Object *movie = json_array_get_object(movies, i);
-            int movie_id = (int)json_object_get_number(movie, "id");
-            const char *movie_title = json_object_get_string(movie, "title");
-            printf("#%d: %s\n", movie_id, movie_title);
-        }
+    JSON_Value *root_value = json_parse_string(strchr(response, '{'));
+    JSON_Object *root_obj = json_value_get_object(root_value);
+    const char *title = json_object_get_string(root_obj, "title");
+    const char *owner = json_object_get_string(root_obj, "owner");
+    printf("title: %s\n", title);
+    printf("owner: %s\n", owner);
+    JSON_Array *movies = json_object_get_array(root_obj, "movies");
+    size_t movies_count = json_array_get_count(movies);
+    for (size_t i = 0; i < movies_count; i++) {
+        JSON_Object *movie = json_array_get_object(movies, i);
+        int movie_id = (int)json_object_get_number(movie, "id");
+        const char *movie_title = json_object_get_string(movie, "title");
+        printf("#%d: %s\n", movie_id, movie_title);
     }
-    else if (strstr(response, "Invalid collection id or you do not own this collection")){
-        printf("ERROR: ID invalid sau nu detii colectia\n");
+    free(url);
+    close_connection(sockfd);
+}
+
+int get_movie_aux(char *message, char *response, char *cookie_login, char *token, char *id){
+    if (cookie_login == NULL)
+        return -1;
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/movies/");
+    strcat(url, id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_get_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "200 OK")){
+        return 0;
+    }
+    else if (strstr(response, "Movie not found")){
+        return -1;
     }
     else
-        printf("ERROR: Fara acces library\n");
+        return -1;
     free(url);
     close_connection(sockfd);
 }
@@ -598,14 +629,24 @@ void add_collection(char *message, char *response, char *cookie_login, char *tok
         return;
     }
     int *movie_ids = calloc(num_movies, sizeof(int));
+    char *buffer = calloc(BUFLEN, sizeof(char));
     for (int i = 0; i < num_movies; i++){
         printf("movie_id[%d]=", i);
         rc = scanf("%d", &movie_ids[i]);
+        sprintf(buffer, "%d", movie_ids[i]);
         if (rc == 0 || movie_ids < 0){
             printf("ERROR: Date invalide/incomplete\n");
             free(title);
+            free(buffer);
             return;
         }
+        if (get_movie_aux(message, response, cookie_login, token, buffer) == -1){
+            printf("ERROR: Date invalide/incomplete\n");
+            free(title);
+            free(buffer);
+            return;
+        }
+
     }
     json_object_set_string(obj, "title", title);
     char *string = json_serialize_to_string(val);
@@ -632,6 +673,7 @@ void add_collection(char *message, char *response, char *cookie_login, char *tok
     json_value_free(val);
     free(title);
     free(movie_ids);
+    free(buffer);
     close_connection(sockfd);
 }
 
@@ -653,15 +695,17 @@ void add_movie_to_collection(char *message, char *response, char *cookie_login, 
     }
     printf("movie_id=");
     rc = scanf("%d", &movie_id);
-    if (rc == 0 || movie_id < 0){
+    char *buffer = calloc(BUFLEN, sizeof(char));
+    sprintf(buffer, "%d", movie_id);
+    if (rc == 0 || movie_id < 0 || get_movie_aux(message, response, cookie_login, token, buffer) == -1){
         printf("ERROR: Date invalide/incomplete\n");
+        free(buffer);
         return;
     }
     json_object_set_number(obj, "id", movie_id);
     
     char *url = calloc(BUFLEN, sizeof(char));
     strcpy(url, "/api/v1/tema/library/collections/");
-    char *buffer = calloc(BUFLEN, sizeof(char));
     sprintf(buffer, "%d", collection_id);
     strcat(url, buffer);
     strcat(url, "/movies");
@@ -698,6 +742,10 @@ void get_collection(char *message, char *response, char *cookie_login, char *tok
     char *id = calloc(BUFLEN, sizeof(char));
     printf("id=");
     scanf("%s",id);
+    if (is_positive_integer(id)){
+        printf("ERROR: Date invalide/incomplete\n");
+        return;
+    }
     char *url = calloc(BUFLEN, sizeof(char));
     strcpy(url, "/api/v1/tema/library/collections/");
     strcat(url, id);
@@ -744,6 +792,10 @@ void delete_collection(char *message, char *response, char *cookie_login, char *
     char *id = calloc(BUFLEN, sizeof(char));
     printf("id=");
     scanf("%s",id);
+    if (is_positive_integer(id)){
+        printf("ERROR: Date invalide/incomplete\n");
+        return;
+    }
     char *url = calloc(BUFLEN, sizeof(char));
     strcpy(url, "/api/v1/tema/library/collections/");
     strcat(url, id);
@@ -765,6 +817,52 @@ void delete_collection(char *message, char *response, char *cookie_login, char *
         printf("ERROR: Fara acces library\n");
     free(url);
     free(id);
+    close_connection(sockfd);
+}
+
+void delete_movie_from_collection(char *message, char *response, char *cookie_login, char *token){
+    if (cookie_login == NULL){
+        printf("ERROR: Fara acces library\n");
+        return;
+    }
+    char *collection_id = calloc(BUFLEN, sizeof(char));
+    char *movie_id = calloc(BUFLEN, sizeof(char));
+    printf("collection_id=");
+    scanf("%s",collection_id);
+    if (is_positive_integer(collection_id)){
+        printf("ERROR: Date invalide/incomplete\n");
+        return;
+    }
+    printf("movie_id=");
+    scanf("%s",movie_id);
+    if (is_positive_integer(movie_id)){
+        printf("ERROR: Date invalide/incomplete\n");
+        return;
+    }
+    char *url = calloc(BUFLEN, sizeof(char));
+    strcpy(url, "/api/v1/tema/library/collections/");
+    strcat(url, collection_id);
+    strcat(url, "/movies/");
+    strcat(url, movie_id);
+    int sockfd = open_connection("63.32.125.183", 8081, AF_INET, SOCK_STREAM, 0);
+    if (token == NULL)
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, NULL);
+    else
+        message = compute_delete_request("63.32.125.183:8081", url, NULL, &cookie_login, 1, token);
+
+    send_to_server(sockfd, message);
+    response = receive_from_server(sockfd);
+    if (strstr(response, "removed from collection")){
+        printf("SUCCESS: Colectie stearsa\n");
+    }
+    else if (strstr(response, "Invalid collection id or you do not own this collection")){
+        printf("ERROR: ID invalid sau nu detii colectia\n");
+    }
+    else
+        printf("ERROR: Fara acces library\n");
+    free(url);
+    free(collection_id);
+    free(movie_id);
     close_connection(sockfd);
 }
 
@@ -818,6 +916,9 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp(command, "get_movie", 9)){
             get_movie(message, response, cookie_login, token);
+        }
+        else if (!strncmp(command, "delete_movie_from_collection", 28)){
+            delete_movie_from_collection(message, response, cookie_login, token);
         }
         else if (!strncmp(command, "delete_movie", 12)){
             delete_movie(message, response, cookie_login, token);
