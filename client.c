@@ -369,7 +369,7 @@ void add_movie(char *message, char *response, char *cookie_login, char *token) {
   char *title = calloc(BUFLEN, sizeof(char));
   int year;
   char *description = calloc(BUFLEN, sizeof(char));
-  double rating;
+  float rating;
   int c;
   while ((c = getchar()) != '\n')
     ;
@@ -390,7 +390,7 @@ void add_movie(char *message, char *response, char *cookie_login, char *token) {
   fgets(description, BUFLEN, stdin);
   description[strcspn(description, "\n")] = '\0';
   printf("rating=");
-  rc = scanf("%lf", &rating);
+  rc = scanf("%f", &rating);
   if (rc == 0 || rating < 0) {
     printf("ERROR: Date invalide/incomplete\n");
     free(title);
@@ -445,7 +445,7 @@ void update_movie(char *message, char *response, char *cookie_login,
   int year;
   char *description = calloc(BUFLEN, sizeof(char));
   char *url = calloc(BUFLEN, sizeof(char));
-  double rating;
+  float rating;
   int c;
   while ((c = getchar()) != '\n')
     ;
@@ -478,7 +478,7 @@ void update_movie(char *message, char *response, char *cookie_login,
   fgets(description, BUFLEN, stdin);
   description[strcspn(description, "\n")] = '\0';
   printf("rating=");
-  rc = scanf("%lf", &rating);
+  rc = scanf("%f", &rating);
   if (rc == 0 || rating < 0) {
     printf("ERROR: Date invalide/incomplete\n");
     free(title);
@@ -558,7 +558,7 @@ void get_movie(char *message, char *response, char *cookie_login, char *token) {
     printf("Title: %s\n", title);
     printf("Year: %d\n", year);
     printf("Description: %s\n", description);
-    printf("Rating: %lf\n", atof(rating));
+    printf("Rating: %.1f\n", atof(rating));
   } else if (strstr(response, "Movie not found")) {
     printf("ERROR: ID invalid\n");
   } else
