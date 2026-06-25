@@ -1,103 +1,60 @@
-- am ales biblioteca parson pentru C recomandata in enunt
-In main alocam dinamic:
-- command - buffer in care citim numele comenzii
-- message - buffer in care stocam cererea HTTP formata complet 
-- response - buffer in care stocam raspunsul serverului
-- cookie_login_admin - buffer in care stocam cookie-ul rezultat de comanda login_admin
-* => verificam daca admin-ul este logat 
-- cookie_login - buffer in care stocam cookie-ul rezultat de comanda login
-* => verificam daca utilizatorul este logat
-- token - buffer in care stocam token-ul JWT
-* => verificam daca utilizatorul are acces la colectia de filme
-* in cazul in care comanda logout_admin are succes, cookie_login_admin = NULL
-* in cazul in care comanda logout are succes, token = NULL, cookie_login = NULL
-Functii 
--- pentru fiecare functie, vom deschide o conexiune pe ip-ul si portul serverului (AF_INET, SOCK_STREAM)
--- mai apoi, vom compune cererea HTTP
--- o vom trimite serverului
--- in functie de mesajul - raspuns al serverului, vom afisa SUCCESS / ERROR si un mesaj suplimentar
--- la final, vom inchide conexiunea
+# Movie Library HTTP Client
 
-* is_positive_integer -> returneaza 0 daca un string reprezinta un numar pozitiv, intreg, -1 altfel
+A C/C++ command-line client for interacting with a REST API over HTTP. The project simulates a small online movie library where an admin can manage users, while regular users can access and manage movies and collections.
 
-1. login_admin -> efectueaza autentificarea pentru admin (doar admin)
-* va returna cookie_login_admin, obtinand folosind strtok si strstr asupra mesajului - raspuns al serverului
+The client communicates directly with the server using sockets, builds HTTP requests manually, sends JSON payloads when needed, and parses the server responses.
 
-2. add_user -> adauga un nou utilizator normal (doar admin)
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca username si password sa nu contina spatii, folosind  getchar si isspace
+## Overview
 
-3. get_users - cere toti utilizatorii de pe server (doar admin)
-* pe langa aspectele clar precizate in enunt:
-~ parsam lista de utlizatori folosind functiile din biblioteca parson
+The application reads commands from standard input and turns them into HTTP requests. Depending on the command, it may send authentication data, request a list of resources, create new entries, update existing ones, or delete items from the library.
 
-4. delete_user - sterge un utilizator normal (doar admin)
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca username sa nu contina spatii, folosind  getchar si isspace
+The project covers two main roles:
 
-5. logout_admin - efectueaza delogarea pentru admin (doar admin)
-* va returna 0, daca delogarea s-a efectuat cu succes
-* -1, altfel
+* **Admin** - logs in, creates users, lists users, deletes users, and logs out.
+* **User** - logs in, requests library access, manages movies, manages collections, and logs out.
 
-6. login - efectueaza autentificarea pentru utilizator normal
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca admin_username, username si password sa nu contina spatii, folosind  getchar si isspace
-* va returna cookie_login, obtinand folosind strtok si strstr asupra mesajului - raspuns al serverului
+Admin users only handle normal user accounts. Movie and collection operations are available through regular user sessions after receiving access to the library.
 
-7. get_access - cere acces pentru colectia de filme
-* returneaza token-ul JWT
+## Main Features
 
-8. get_movies - cere toate filmele de pe server
-* pe langa aspectele clar precizate in enunt:
-~ parsam lista de filme folosind functiile din biblioteca parson
+* admin login and logout;
+* add, list, and delete normal users;
+* regular user login and logout;
+* request access to the movie library;
+* list all movies and view details for one movie;
+* add, update, and delete movies;
+* list collections and view collection details;
+* create and delete collections;
+* add or remove movies from a collection;
+* parse JSON responses and build JSON request bodies.
 
-9. get_movie - cere informatie despre un film
-* pe langa aspectele clar precizate in enunt:
-~ parsam detaliile filmului (title, year, description si rating) folosind functiile din biblioteca parson
+## Authentication and Access
 
-10. add_movie - adauga un film
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca year sa fie un numar intreg pozitiv, folosind return code-ul lui scanf
-~ ca rating sa fie un numar real pozitiv, cu valori intre 0 si 9.9, folosind return code-ul lui scanf
+The client keeps track of the session cookie returned after login. For library operations, it also stores the JWT token received after requesting access.
 
-11. delete_movie - sterge un film
+The cookie is used to prove that the client is authenticated, while the JWT token is sent in the `Authorization: Bearer` header for protected library routes.
 
-12. update_movie - actualizeaza datele unui film
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca id sa fie un numar intreg pozitiv, folosind return code-ul lui scanf
-~ ca year sa fie un numar intreg pozitiv, folosind return code-ul lui scanf
-~ ca rating sa fie un numar real pozitiv, cu valori intre 0 si 9.9, folosind return code-ul lui scanf
+## HTTP Communication
 
-13. get_collections - cere toate colectiile de filme de pe server
-* pe langa aspectele clar precizate in enunt:
-~ parsam detaliile collectiilor (id si title) folosind functiile din biblioteca parson
+All communication is done through raw TCP sockets. The client manually builds requests with the correct method, route, headers, body, cookies, and authorization token.
 
+Responses are parsed to detect success or error states and to extract useful data such as cookies, tokens, users, movies, and collections.
 
-14. get_collection - cere informatie despre o colectie de filme
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca id sa fie un numar intreg pozitiv, folosind return code-ul lui scanf
-* apoi:
-~ parsam detaliile collectiei (title, owner, lista filmelor din colectie) folosind functiile din biblioteca parson
+## Input Format
 
-15. add_collection - adaugă o colecție de filme
+Commands and their fields are entered on separate lines. Example:
 
-16. delete_collection - sterge o colectie de filme
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca num_movies sa fie un numar intreg pozitiv, folosind return code-ul lui scanf
-* pentru fiecare film citit, vom apela functia add_movie_to_collection_aux, care adauga fiecare film la colectie, insa fara a afisa mesaje aditionale
+```text id="3w8ftb"
+login
+admin_username=admin
+username=test
+password=test
+```
 
-17. add_movie_to_collection - adauga un film intr-o colectie
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca collection_id si movie_id sa fie numere intregi pozitive, folosind return code-ul lui scanf
+For movie or collection data, values such as titles and descriptions may contain spaces, so input parsing has to preserve the full value after the field name.
 
-18. delete_movie_from_collection - sterge un film dintr-o colecție
-* pe langa aspectele clar precizate in enunt, verificam:
-~ ca collection_id si movie_id sa fie numere intregi pozitive, folosind return code-ul lui scanf
+## Notes
 
-19. logout - efectueaza delogarea utilizatorului
-* va returna 0, daca delogarea s-a efectuat cu succes
-* -1, altfel
+The project focuses on understanding how web clients work below higher-level libraries. It combines HTTP message formatting, JSON handling, session cookies, JWT authorization, and command-line interaction into one small client.
 
-20. exit - efectueaza iesirea din program
-
-
+The implementation is kept modular so request building, response parsing, authentication state, and command handling remain easy to follow.
